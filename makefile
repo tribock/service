@@ -165,6 +165,8 @@ VERSION         := 0.0.1
 SERVICE_IMAGE   := $(BASE_IMAGE_NAME)/$(SERVICE_NAME):$(VERSION)
 METRICS_IMAGE   := $(BASE_IMAGE_NAME)/$(SERVICE_NAME)-metrics:$(VERSION)
 
+ocp4gce := kubectl --kubeconfig /tmp/ocp4gce/ocp-install/auth/kubeconfig
+
 # VERSION       := "0.0.1-$(shell git rev-parse --short HEAD)"
 
 # ==============================================================================
@@ -246,9 +248,9 @@ dev-up-local:
 	kind load docker-image $(LOKI) --name $(KIND_CLUSTER)
 	kind load docker-image $(PROMTAIL) --name $(KIND_CLUSTER)
 
-dev-up: dev-up-local
-	telepresence --context=kind-$(KIND_CLUSTER) helm install --request-timeout 2m 
-	telepresence --context=kind-$(KIND_CLUSTER) connect
+dev-up: #dev-up-local
+	telepresence  helm install --request-timeout 2m 
+	telepresence  connect
 
 dev-down-local:
 	kind delete cluster --name $(KIND_CLUSTER)
@@ -267,31 +269,31 @@ dev-load:
 	kind load docker-image $(METRICS_IMAGE) --name $(KIND_CLUSTER)
 
 dev-apply:
-	kustomize build zarf/k8s/dev/vault | kubectl apply -f -
+	kustomize build zarf/k8s/dev/vault | $(ocp4gce) apply -f -
 
-	kustomize build zarf/k8s/dev/database | kubectl apply -f -
-	kubectl rollout status --namespace=$(NAMESPACE) --watch --timeout=120s sts/database
+	kustomize build zarf/k8s/dev/database | $(ocp4gce) apply -f -
+	$(ocp4gce) rollout status --namespace=$(NAMESPACE) --watch --timeout=120s sts/database
 
-	kustomize build zarf/k8s/dev/grafana | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=grafana --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/grafana | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=grafana --timeout=120s --for=condition=Ready
 
-	kustomize build zarf/k8s/dev/prometheus | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=prometheus --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/prometheus | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=prometheus --timeout=120s --for=condition=Ready
 
-	kustomize build zarf/k8s/dev/tempo | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=tempo --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/tempo | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=tempo --timeout=120s --for=condition=Ready
 
-	kustomize build zarf/k8s/dev/loki | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=loki --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/loki | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=loki --timeout=120s --for=condition=Ready
 
-	kustomize build zarf/k8s/dev/promtail | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=promtail --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/promtail | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=promtail --timeout=120s --for=condition=Ready
 
-	kustomize build zarf/k8s/dev/sales | kubectl apply -f -
-	kubectl wait pods --namespace=$(NAMESPACE) --selector app=$(APP) --timeout=120s --for=condition=Ready
+	kustomize build zarf/k8s/dev/sales | $(ocp4gce) apply -f -
+	$(ocp4gce) wait pods --namespace=$(NAMESPACE) --selector app=$(APP) --timeout=120s --for=condition=Ready
 
 dev-restart:
-	kubectl rollout restart deployment $(APP) --namespace=$(NAMESPACE)
+	$(ocp4gce) rollout restart deployment $(APP) --namespace=$(NAMESPACE)
 
 dev-update: all dev-load dev-restart
 
@@ -300,77 +302,77 @@ dev-update-apply: all dev-load dev-apply
 # ------------------------------------------------------------------------------
 
 dev-logs:
-	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) --all-containers=true -f --tail=100 --max-log-requests=6 | go run app/tooling/logfmt/main.go -service=$(SERVICE_NAME)
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=$(APP) --all-containers=true -f --tail=100 --max-log-requests=6 | go run app/tooling/logfmt/main.go -service=$(SERVICE_NAME)
 
 dev-logs-init:
-	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-vault-system
-	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-vault-loadkeys
-	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-migrate
-	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-seed
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-vault-system
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-vault-loadkeys
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-migrate
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=$(APP) -f --tail=100 -c init-seed
 
 dev-status:
-	kubectl get nodes -o wide
-	kubectl get svc -o wide
-	kubectl get pods -o wide --watch --all-namespaces
+	$(ocp4gce) get nodes -o wide
+	$(ocp4gce) get svc -o wide
+	$(ocp4gce) get pods -o wide --watch --all-namespaces
 
 dev-describe:
-	kubectl describe nodes
-	kubectl describe svc
+	$(ocp4gce) describe nodes
+	$(ocp4gce) describe svc
 
 dev-describe-deployment:
-	kubectl describe deployment --namespace=$(NAMESPACE) $(APP)
+	$(ocp4gce) describe deployment --namespace=$(NAMESPACE) $(APP)
 
 dev-describe-sales:
-	kubectl describe pod --namespace=$(NAMESPACE) -l app=$(APP)
+	$(ocp4gce) describe pod --namespace=$(NAMESPACE) -l app=$(APP)
 
 dev-describe-telepresence:
-	kubectl describe pod --namespace=ambassador -l app=traffic-manager
+	$(ocp4gce) describe pod --namespace=ambassador -l app=traffic-manager
 
 # ------------------------------------------------------------------------------
 
 dev-logs-vault:
-	kubectl logs --namespace=$(NAMESPACE) -l app=vault --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=vault --all-containers=true -f --tail=100
 
 dev-logs-db:
-	kubectl logs --namespace=$(NAMESPACE) -l app=database --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=database --all-containers=true -f --tail=100
 
 dev-logs-grafana:
-	kubectl logs --namespace=$(NAMESPACE) -l app=grafana --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=grafana --all-containers=true -f --tail=100
 
 dev-logs-tempo:
-	kubectl logs --namespace=$(NAMESPACE) -l app=tempo --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=tempo --all-containers=true -f --tail=100
 
 dev-logs-loki:
-	kubectl logs --namespace=$(NAMESPACE) -l app=loki --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=loki --all-containers=true -f --tail=100
 
 dev-logs-promtail:
-	kubectl logs --namespace=$(NAMESPACE) -l app=promtail --all-containers=true -f --tail=100
+	$(ocp4gce) logs --namespace=$(NAMESPACE) -l app=promtail --all-containers=true -f --tail=100
 
 # ------------------------------------------------------------------------------
 
 dev-services-delete:
-	kustomize build zarf/k8s/dev/sales | kubectl delete -f -
-	kustomize build zarf/k8s/dev/grafana | kubectl delete -f -
-	kustomize build zarf/k8s/dev/tempo | kubectl delete -f -
-	kustomize build zarf/k8s/dev/loki | kubectl delete -f -
-	kustomize build zarf/k8s/dev/promtail | kubectl delete -f -
-	kustomize build zarf/k8s/dev/database | kubectl delete -f -
+	kustomize build zarf/k8s/dev/sales | $(ocp4gce) delete -f -
+	kustomize build zarf/k8s/dev/grafana | $(ocp4gce) delete -f -
+	kustomize build zarf/k8s/dev/tempo | $(ocp4gce) delete -f -
+	kustomize build zarf/k8s/dev/loki | $(ocp4gce) delete -f -
+	kustomize build zarf/k8s/dev/promtail | $(ocp4gce) delete -f -
+	kustomize build zarf/k8s/dev/database | $(ocp4gce) delete -f -
 
 dev-describe-replicaset:
-	kubectl get rs
-	kubectl describe rs --namespace=$(NAMESPACE) -l app=$(APP)
+	$(ocp4gce) get rs
+	$(ocp4gce) describe rs --namespace=$(NAMESPACE) -l app=$(APP)
 
 dev-events:
-	kubectl get ev --sort-by metadata.creationTimestamp
+	$(ocp4gce) get ev --sort-by metadata.creationTimestamp
 
 dev-events-warn:
-	kubectl get ev --field-selector type=Warning --sort-by metadata.creationTimestamp
+	$(ocp4gce) get ev --field-selector type=Warning --sort-by metadata.creationTimestamp
 
 dev-shell:
-	kubectl exec --namespace=$(NAMESPACE) -it $(shell kubectl get pods --namespace=$(NAMESPACE) | grep sales | cut -c1-26) --container sales-api -- /bin/sh
+	$(ocp4gce) exec --namespace=$(NAMESPACE) -it $(shell $(ocp4gce) get pods --namespace=$(NAMESPACE) | grep sales | cut -c1-26) --container sales-api -- /bin/sh
 
 dev-database-restart:
-	kubectl rollout restart statefulset database --namespace=$(NAMESPACE)
+	$(ocp4gce) rollout restart statefulset database --namespace=$(NAMESPACE)
 
 # ==============================================================================
 # Administration
